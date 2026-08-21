@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Idempotent agenteiamail installer — FR7 implementation skeleton.
+# Idempotent agenteiamail installer — FR7 implementation.
 #
-# The public CLI contract, inert discovery, and fail-closed ownership inventory
-# land before any host mutation phase. Every valid non-help, non-dry invocation
-# remains deliberately inert.
+# Discovery and dry-run are inert. Mutating install/upgrade operations converge
+# only the manifest-owned filesystem and service boundary after fail-closed
+# inventory and runtime-specific pre-activation probes.
 
 set -euo pipefail
 
@@ -43,7 +43,7 @@ Exit status:
   0   Success: converged and no changes were needed
   10  Success: converged and changes were made
   64  Usage error
-  78  Configuration, prerequisite, or not-yet-implemented phase error
+  78  Configuration, prerequisite, unavailable phase, or ownership conflict
 
 Exit status 10 is success. Shell wrappers, CI, and configuration-management
 callers must accept both 0 and 10 as successful convergence.
@@ -249,7 +249,7 @@ discover_prerequisites() {
     if ((dry_run)); then
         printf 'runtime_probe=deferred (dry-run never executes runtime code)\n'
     else
-        printf 'runtime_probe=deferred (filesystem-only convergence never executes runtime code)\n'
+        printf 'runtime_probe=deferred-until=pre-activation-validation\n'
     fi
     printf 'systemd_user=%s\n' "$systemd_state"
     printf 'linger=%s\n' "$linger"

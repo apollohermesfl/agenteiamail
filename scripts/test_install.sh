@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Regression boundary for the first FR7 installer skeleton: it must be runnable,
-# reject ambiguous input, and keep dry-run free of host and runtime side effects.
+# Regression boundary for the FR7 installer: it must be runnable, reject
+# ambiguous input, converge only its owned boundary, and keep dry-run inert.
 
 set -uo pipefail
 umask 077
@@ -157,7 +157,8 @@ check_status 'help is runnable' 0 --help
 }
 [[ "$LAST_OUTPUT" == *'owned filesystem and required user services converge'* &&
    "$LAST_OUTPUT" == *'never edit Hermes configuration'* &&
-   "$LAST_OUTPUT" != *'service enablement and Hermes mutation remain deferred'* ]] || {
+   "$LAST_OUTPUT" != *'service enablement and Hermes mutation remain deferred'* &&
+   "$LAST_OUTPUT" != *'not-yet-implemented phase error'* ]] || {
     printf 'FAIL help reports the completed FR7 boundary honestly\n'; fail=$((fail + 1));
 }
 if grep -Fq 'Exit status `10` is success' "$ROOT/INSTALL.md" &&
@@ -288,6 +289,11 @@ mkdir -p "$FAKE_SYSTEMD_STATE"
 # runtime through the user manager, and converges only required service state.
 check_status 'fresh OpenClaw convergence creates managed artifacts' 10 \
     --runtime openclaw
+[[ "$LAST_OUTPUT" == *'runtime_probe=deferred-until=pre-activation-validation'* &&
+   "$LAST_OUTPUT" != *'filesystem-only convergence never executes runtime code'* ]] || {
+    printf 'FAIL non-dry discovery misreports the runtime probe as permanently deferred\n'
+    fail=$((fail + 1))
+}
 manifest="$sandbox/.config/agenteiamail/install.manifest"
 runtime_env="$sandbox/.config/agenteiamail/runtime.env"
 [[ -f "$manifest" && ! -L "$manifest" && "$(stat -c %a "$manifest")" == 600 ]] || {
@@ -770,11 +776,11 @@ mv "$fixture_bin/openclaw.off" "$fixture_bin/openclaw"
 
 after=$(python3 -c 'from pathlib import Path; print(sorted(str(p) for p in Path("'$sandbox'").rglob("*")))')
 if [[ "$before" == "$after" ]]; then
-    printf 'ok   skeleton leaves HOME untouched
+    printf 'ok   dry-run checks leave HOME untouched
 '
     pass=$((pass + 1))
 else
-    printf 'FAIL skeleton changed HOME
+    printf 'FAIL dry-run checks changed HOME
 '
     fail=$((fail + 1))
 fi
