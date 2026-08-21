@@ -155,6 +155,11 @@ check_status 'help is runnable' 0 --help
 [[ "$LAST_OUTPUT" == *'Exit status 10 is success'* ]] || {
     printf 'FAIL help documents successful status 10\n'; fail=$((fail + 1));
 }
+[[ "$LAST_OUTPUT" == *'owned filesystem and required user services converge'* &&
+   "$LAST_OUTPUT" == *'never edit Hermes configuration'* &&
+   "$LAST_OUTPUT" != *'service enablement and Hermes mutation remain deferred'* ]] || {
+    printf 'FAIL help reports the completed FR7 boundary honestly\n'; fail=$((fail + 1));
+}
 if grep -Fq 'Exit status `10` is success' "$ROOT/INSTALL.md" &&
    grep -Fq -- '--upgrade' "$ROOT/INSTALL.md" &&
    grep -Fq -- '--uninstall' "$ROOT/INSTALL.md" &&

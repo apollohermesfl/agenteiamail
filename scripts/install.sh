@@ -48,8 +48,9 @@ Exit status:
 Exit status 10 is success. Shell wrappers, CI, and configuration-management
 callers must accept both 0 and 10 as successful convergence.
 
-FR7 boundary status: OpenClaw filesystem artifacts converge atomically;
-service enablement and Hermes mutation remain deferred.
+FR7 boundary status: owned filesystem and required user services converge;
+Hermes routes receive signed synthetic probes before activation. Guidance labels
+never edit Hermes configuration, create profiles, infer URLs, or grant tools.
 EOF
 }
 
