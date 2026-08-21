@@ -371,6 +371,17 @@ rm -f "$sandbox/runtime-side-effect"
     fail=$((fail + 1))
 }
 : >"$FAKE_SYSTEMD_LOG"
+chmod 0644 "$runtime_env"
+check_status 'dry-run plans repair for owned artifact mode drift' 10 \
+    --runtime openclaw --dry-run
+[[ "$LAST_OUTPUT" == *"inventory planned-update-file=$runtime_env reason=mode-drift"* ]] || {
+    printf 'FAIL dry-run did not report the owned mode repair\n'; fail=$((fail + 1));
+}
+check_status 'convergence repairs owned artifact mode drift' 10 --runtime openclaw
+[[ "$(stat -c %a "$runtime_env")" == 600 ]] || {
+    printf 'FAIL convergence did not restore the owned runtime config mode\n'; fail=$((fail + 1));
+}
+: >"$FAKE_SYSTEMD_LOG"
 check_status 'second OpenClaw convergence is idempotent' 0 --runtime openclaw
 [[ "$(<"$FAKE_SYSTEMD_LOG")" != *'enable --now'* ]] || {
     printf 'FAIL converged service state was enabled again\n'; fail=$((fail + 1));

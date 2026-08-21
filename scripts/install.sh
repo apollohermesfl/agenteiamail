@@ -518,10 +518,10 @@ sha256_desired() {
 }
 
 classify_planned_artifact() {
-    local kind=$1 destination=$2 source=$3 actual desired
+    local kind=$1 destination=$2 source=$3 actual desired current_mode expected_mode
     if [[ -e "$destination" || -L "$destination" ]]; then
         if [[ -n "${owned_digests[$destination]+present}" ]]; then
-            if [[ -L "$destination" || ! -f "$destination" ]]; then
+            if [[ -L "$destination" || ! -f "$destination" || ! -O "$destination" ]]; then
                 printf 'inventory conflict-owned-%s=%s reason=unsafe-artifact-type\n' \
                     "$kind" "$destination"
                 inventory_conflicts=1
@@ -532,6 +532,14 @@ classify_planned_artifact() {
                 printf 'inventory conflict-owned-%s=%s reason=changed-outside-installer\n' \
                     "$kind" "$destination"
                 inventory_conflicts=1
+                return
+            fi
+            current_mode=$(stat -Lc '%a' -- "$destination" 2>/dev/null || true)
+            expected_mode=$(artifact_expected_mode "$destination")
+            if [[ "0$current_mode" != "$expected_mode" ]]; then
+                printf 'inventory planned-update-%s=%s reason=mode-drift current=%s expected=%s\n' \
+                    "$kind" "$destination" "${current_mode:-unknown}" "$expected_mode"
+                inventory_changes=1
                 return
             fi
             desired=$(sha256_desired "$destination" "$source")
