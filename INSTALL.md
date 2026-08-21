@@ -76,9 +76,12 @@ supply all three full URLs through `HERMES_NOTIFY_URL`, `HERMES_ROSTER_URL`, and
 In interactive mode without external secret paths, the first run generates two
 different mode-0600 route secrets, records their ownership, prints them once, and
 exits `78` before writing units or activating services. Configure each value on
-only its matching route, then rerun. `--non-interactive` never generates or prints
-secret material and therefore requires both `--notify-secret-file` and
-`--roster-secret-file`; those files remain external validation-only artifacts.
+only its matching route, then rerun. Because the values are printed in the
+foreground, they may be retained in a terminal or session transcript; use the
+non-interactive path when that exposure is unacceptable. `--non-interactive`
+never generates or prints secret material and therefore requires both
+`--notify-secret-file` and `--roster-secret-file`; those files remain external
+validation-only artifacts.
 
 You are not building application code during a manual installation. The code
 exists. The job is to prove the host can run it, get the credentials, wire it up,

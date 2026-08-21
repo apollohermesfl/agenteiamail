@@ -164,11 +164,12 @@ check_status 'help is runnable' 0 --help
 if grep -Fq 'Exit status `10` is success' "$ROOT/INSTALL.md" &&
    grep -Fq -- '--upgrade' "$ROOT/INSTALL.md" &&
    grep -Fq -- '--uninstall' "$ROOT/INSTALL.md" &&
-   grep -Fq -- '`--deliver` and `--chat-id` are guidance labels only' "$ROOT/INSTALL.md"; then
+   grep -Fq -- '`--deliver` and `--chat-id` are guidance labels only' "$ROOT/INSTALL.md" &&
+   grep -Fq -- 'terminal or session transcript' "$ROOT/INSTALL.md"; then
     printf 'ok   INSTALL.md documents installer modes and successful status 10\n'
     pass=$((pass + 1))
 else
-    printf 'FAIL INSTALL.md omits installer modes or successful status 10\n'
+    printf 'FAIL INSTALL.md omits installer modes, status 10, or secret transcript exposure\n'
     fail=$((fail + 1))
 fi
 
