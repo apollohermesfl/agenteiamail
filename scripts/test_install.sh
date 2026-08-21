@@ -233,6 +233,25 @@ check_status 'non-interactive Hermes secret-file shape parses' 78 \
     --runtime hermes --non-interactive --profile default \
     --notify-secret-file /tmp/notify --roster-secret-file /tmp/roster
 
+# An owned generated secret with intact content but insecure mode is planned as
+# repair work. A mutating rerun must actually perform that repair before any
+# route probe, rather than leaving the plan permanently unconvergeable.
+rm -rf "$sandbox/.config" "$FAKE_SYSTEMD_STATE"
+mkdir -p "$FAKE_SYSTEMD_STATE"
+check_status 'Hermes same-runtime mode fixture creates owned route secrets' 78 \
+    --runtime hermes --profile default
+generated_notify="$sandbox/.config/agenteiamail/hermes/notify.secret"
+chmod 0644 "$generated_notify"
+check_status 'Hermes same-runtime rerun reaches the route boundary after mode repair' 75 \
+    --runtime hermes --profile default
+if [[ "$(stat -c %a "$generated_notify")" == 600 ]]; then
+    printf 'ok   Hermes same-runtime convergence repairs owned secret mode drift\n'
+    pass=$((pass + 1))
+else
+    printf 'FAIL Hermes same-runtime convergence left an owned secret mode insecure\n'
+    fail=$((fail + 1))
+fi
+
 # Runtime migration is explicit upgrade work. A first-stage Hermes install owns
 # its generated secrets even before route configuration; switching to OpenClaw
 # must preserve those secrets and shared mail state while converging the common

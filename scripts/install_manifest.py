@@ -248,6 +248,41 @@ def cmd_remove_artifact(args: argparse.Namespace) -> None:
         os.close(dir_fd)
 
 
+def cmd_repair_artifact_mode(args: argparse.Namespace) -> None:
+    """Repair one proven artifact's mode without copying or disclosing its bytes."""
+    destination = Path(args.path)
+    dir_fd = _open_dir(destination.parent)
+    try:
+        metadata = os.stat(destination.name, dir_fd=dir_fd, follow_symlinks=False)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.geteuid():
+            raise Refusal(f"owned artifact is not a user-owned regular file: {destination}")
+        file_fd = os.open(
+            destination.name,
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=dir_fd,
+        )
+        try:
+            current = hashlib.sha256()
+            while chunk := os.read(file_fd, 8192):
+                current.update(chunk)
+            opened = os.fstat(file_fd)
+            latest = os.stat(destination.name, dir_fd=dir_fd, follow_symlinks=False)
+            if (opened.st_dev, opened.st_ino) != (latest.st_dev, latest.st_ino):
+                raise Refusal(f"owned artifact changed during mode repair: {destination}")
+            if current.hexdigest() != args.expected_digest:
+                raise Refusal(f"owned artifact changed outside the installer: {destination}")
+            os.fchmod(file_fd, args.mode)
+            os.fsync(file_fd)
+            repaired = os.stat(destination.name, dir_fd=dir_fd, follow_symlinks=False)
+            if ((opened.st_dev, opened.st_ino) != (repaired.st_dev, repaired.st_ino) or
+                    stat.S_IMODE(repaired.st_mode) != args.mode):
+                raise Refusal(f"owned artifact changed during mode repair: {destination}")
+        finally:
+            os.close(file_fd)
+    finally:
+        os.close(dir_fd)
+
+
 def cmd_write_artifact(args: argparse.Namespace) -> None:
     destination = Path(args.path)
     data = sys.stdin.buffer.read()
@@ -338,6 +373,10 @@ def parser() -> argparse.ArgumentParser:
     verify.add_argument("--expected-digest", required=True)
     verify.add_argument("--expected-mode", type=lambda value: int(value, 8), required=True)
     verify.set_defaults(verify_only=True)
+    repair_mode = sub.add_parser("repair-artifact-mode")
+    repair_mode.add_argument("--path", required=True)
+    repair_mode.add_argument("--expected-digest", required=True)
+    repair_mode.add_argument("--mode", type=lambda value: int(value, 8), required=True)
     return result
 
 
@@ -349,7 +388,8 @@ def main() -> None:
          "migrate-runtime": cmd_migrate_runtime,
          "write-artifact": cmd_write_artifact,
          "remove-artifact": cmd_remove_artifact,
-         "verify-artifact": cmd_remove_artifact}[args.command](args)
+         "verify-artifact": cmd_remove_artifact,
+         "repair-artifact-mode": cmd_repair_artifact_mode}[args.command](args)
     except Refusal as exc:
         _die(str(exc))
     except OSError as exc:

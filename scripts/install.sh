@@ -583,7 +583,7 @@ classify_planned_artifact() {
 }
 
 classify_planned_secret() {
-    local destination=$1 actual expected
+    local destination=$1 actual expected current_mode
     if [[ ! -e "$destination" && ! -L "$destination" ]]; then
         printf 'inventory planned-managed-secret=%s source=generated-once-interactively\n' \
             "$destination"
@@ -598,8 +598,7 @@ classify_planned_secret() {
         inventory_unproven_conflicts=1
         return
     fi
-    if [[ -L "$destination" || ! -f "$destination" || ! -O "$destination" ||
-          "$(stat -Lc '%a' -- "$destination" 2>/dev/null || true)" != 600 ]]; then
+    if [[ -L "$destination" || ! -f "$destination" || ! -O "$destination" ]]; then
         printf 'inventory conflict-owned-secret=%s reason=unsafe-artifact-metadata\n' \
             "$destination"
         inventory_conflicts=1
@@ -610,6 +609,13 @@ classify_planned_secret() {
         printf 'inventory conflict-owned-secret=%s reason=changed-outside-installer\n' \
             "$destination"
         inventory_conflicts=1
+        return
+    fi
+    current_mode=$(stat -Lc '%a' -- "$destination" 2>/dev/null || true)
+    if [[ "$current_mode" != 600 ]]; then
+        printf 'inventory planned-update-secret=%s reason=mode-drift current=%s expected=0600\n' \
+            "$destination" "${current_mode:-unknown}"
+        inventory_changes=1
         return
     fi
     printf 'inventory existing-managed-secret=%s state=converged\n' "$destination"
@@ -876,11 +882,22 @@ converge_runtime_filesystem() {
 }
 
 converge_generated_secret() {
-    local label=$1 destination=$2 expected actual secret_value output digest
+    local label=$1 destination=$2 expected actual secret_value output digest current_mode
     expected=${owned_digests[$destination]:-}
     if [[ -e "$destination" && -n "$expected" ]]; then
         actual=$(sha256_file "$destination")
         if [[ "$actual" == "$expected" ]]; then
+            current_mode=$(stat -Lc '%a' -- "$destination" 2>/dev/null || true)
+            if [[ "$current_mode" != 600 ]]; then
+                if ! output=$("$discovered_python" "$ROOT/scripts/install_manifest.py" \
+                    repair-artifact-mode --path "$destination" \
+                    --expected-digest "$expected" --mode 0600 2>&1); then
+                    printf '%s\n' "$output" >&2
+                    exit "$EX_CONFIG"
+                fi
+                changes_made=1
+                runtime_filesystem_changed=1
+            fi
             return
         fi
         die_config "owned Hermes $label secret changed outside the installer: $destination"
