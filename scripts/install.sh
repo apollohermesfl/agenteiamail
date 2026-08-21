@@ -412,9 +412,30 @@ load_ownership_manifest() {
     done <<<"$output"
 }
 
+validate_owned_boundary_for_migration() {
+    local destination output
+    for destination in "${managed_paths[@]}"; do
+        [[ -n "${owned_digests[$destination]+present}" ]] || continue
+        validate_container_chain "${destination%/*}" >/dev/null || \
+            die_config "unsafe artifact container during runtime migration: ${destination%/*}"
+        [[ -e "$destination" || -L "$destination" ]] || \
+            die_config "owned artifact is missing during runtime migration: $destination"
+        if ! output=$(python3 "$ROOT/scripts/install_manifest.py" verify-artifact \
+            --path "$destination" --expected-digest "${owned_digests[$destination]}" 2>&1); then
+            printf '%s\n' "$output" >&2
+            exit "$EX_CONFIG"
+        fi
+    done
+}
+
 migrate_ownership_manifest() {
     local output path
     [[ "$manifest_runtime" != "$runtime" ]] || return 0
+    # The target runtime may not consume every record carried from the previous
+    # runtime (notably generated Hermes secrets). Validate the complete ledger
+    # before transferring its runtime header so a modified carried record cannot
+    # bypass target-runtime inventory and retain false ownership provenance.
+    validate_owned_boundary_for_migration
     local -a arguments=(
         --manifest "$manifest"
         --from-runtime "$manifest_runtime"
