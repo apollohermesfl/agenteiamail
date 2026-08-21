@@ -219,6 +219,11 @@ def cmd_remove_artifact(args: argparse.Namespace) -> None:
             return
         if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.geteuid():
             raise Refusal(f"owned artifact is not a user-owned regular file: {destination}")
+        if stat.S_IMODE(metadata.st_mode) != args.expected_mode:
+            raise Refusal(
+                f"owned artifact mode changed outside the installer: {destination}; "
+                f"expected {args.expected_mode:04o}"
+            )
         file_fd = os.open(destination.name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0), dir_fd=dir_fd)
         try:
             current = hashlib.sha256()
@@ -326,10 +331,12 @@ def parser() -> argparse.ArgumentParser:
     remove = sub.add_parser("remove-artifact")
     remove.add_argument("--path", required=True)
     remove.add_argument("--expected-digest", required=True)
+    remove.add_argument("--expected-mode", type=lambda value: int(value, 8), required=True)
     remove.set_defaults(verify_only=False)
     verify = sub.add_parser("verify-artifact")
     verify.add_argument("--path", required=True)
     verify.add_argument("--expected-digest", required=True)
+    verify.add_argument("--expected-mode", type=lambda value: int(value, 8), required=True)
     verify.set_defaults(verify_only=True)
     return result
 

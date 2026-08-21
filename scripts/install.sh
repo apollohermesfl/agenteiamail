@@ -385,6 +385,7 @@ manifest_arguments() {
 load_ownership_manifest() {
     local output kind path digest previous_runtime
     declare -gA owned_digests=()
+    declare -gA owned_kinds=()
     manifest_runtime=$runtime
     [[ -e "$manifest" || -L "$manifest" ]] || return 0
     local -a arguments=()
@@ -408,8 +409,19 @@ load_ownership_manifest() {
     fi
     while IFS=$'\t' read -r kind path digest; do
         [[ -n "$kind" ]] || continue
+        owned_kinds["$path"]=$kind
         owned_digests["$path"]=$digest
     done <<<"$output"
+}
+
+artifact_expected_mode() {
+    local destination=$1
+    if [[ "${owned_kinds[$destination]:-}" == secret ||
+          "$destination" == "$config_dir/runtime.env" ]]; then
+        printf '0600'
+    else
+        printf '0644'
+    fi
 }
 
 validate_owned_boundary_for_migration() {
@@ -421,7 +433,8 @@ validate_owned_boundary_for_migration() {
         [[ -e "$destination" || -L "$destination" ]] || \
             die_config "owned artifact is missing during runtime migration: $destination"
         if ! output=$(python3 "$ROOT/scripts/install_manifest.py" verify-artifact \
-            --path "$destination" --expected-digest "${owned_digests[$destination]}" 2>&1); then
+            --path "$destination" --expected-digest "${owned_digests[$destination]}" \
+            --expected-mode "$(artifact_expected_mode "$destination")" 2>&1); then
             printf '%s\n' "$output" >&2
             exit "$EX_CONFIG"
         fi
@@ -792,7 +805,8 @@ uninstall_owned_filesystem() {
             die_config "unsafe artifact container during uninstall: ${destination%/*}"
         if [[ -d "${destination%/*}" ]]; then
             if ! output=$(python3 "$ROOT/scripts/install_manifest.py" verify-artifact \
-                --path "$destination" --expected-digest "${owned_digests[$destination]}" 2>&1); then
+                --path "$destination" --expected-digest "${owned_digests[$destination]}" \
+                --expected-mode "$(artifact_expected_mode "$destination")" 2>&1); then
                 printf '%s\n' "$output" >&2
                 exit "$EX_CONFIG"
             fi
@@ -805,7 +819,8 @@ uninstall_owned_filesystem() {
             die_config "unsafe artifact container during uninstall: ${destination%/*}"
         if [[ -d "${destination%/*}" ]]; then
             if ! output=$(python3 "$ROOT/scripts/install_manifest.py" remove-artifact \
-                --path "$destination" --expected-digest "${owned_digests[$destination]}" 2>&1); then
+                --path "$destination" --expected-digest "${owned_digests[$destination]}" \
+                --expected-mode "$(artifact_expected_mode "$destination")" 2>&1); then
                 printf '%s\n' "$output" >&2
                 exit "$EX_CONFIG"
             fi

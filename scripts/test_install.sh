@@ -256,6 +256,23 @@ else
 fi
 rm -rf "$sandbox/.config" "$FAKE_SYSTEMD_STATE"
 mkdir -p "$FAKE_SYSTEMD_STATE"
+check_status 'Hermes migration metadata fixture creates owned route secrets' 78 \
+    --runtime hermes --profile default
+generated_notify="$sandbox/.config/agenteiamail/hermes/notify.secret"
+manifest="$sandbox/.config/agenteiamail/install.manifest"
+chmod 0644 "$generated_notify"
+check_status 'runtime migration rejects an insecure carried secret mode' 78 \
+    --runtime openclaw --upgrade
+if grep -Fxq $'runtime\thermes' "$manifest" &&
+   [[ ! -e "$FAKE_SYSTEMD_STATE/agenteiamail-idle.service.enabled" ]]; then
+    printf 'ok   insecure carried secret leaves ownership and services on the original runtime\n'
+    pass=$((pass + 1))
+else
+    printf 'FAIL insecure carried secret transferred ownership or activated services\n'
+    fail=$((fail + 1))
+fi
+rm -rf "$sandbox/.config" "$FAKE_SYSTEMD_STATE"
+mkdir -p "$FAKE_SYSTEMD_STATE"
 check_status 'Hermes migration fixture creates owned route secrets' 78 \
     --runtime hermes --profile default
 generated_notify="$sandbox/.config/agenteiamail/hermes/notify.secret"
