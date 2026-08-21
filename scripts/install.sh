@@ -972,10 +972,15 @@ probe_hermes_webhook_support() {
 }
 
 probe_hermes_routes() {
-    HERMES_NOTIFY_SECRET_FILE="$notify_secret_file" \
-    HERMES_ROSTER_SECRET_FILE="$roster_secret_file" \
-    HERMES_SIGNATURE_MODE=v2 \
-    "$discovered_python" "$ROOT/scripts/hermes_smoke.py"
+    local output
+    if ! output=$(HERMES_NOTIFY_SECRET_FILE="$notify_secret_file" \
+        HERMES_ROSTER_SECRET_FILE="$roster_secret_file" \
+        HERMES_SIGNATURE_MODE=v2 \
+        "$discovered_python" "$ROOT/scripts/hermes_smoke.py" 2>&1); then
+        printf '%s\n' "$output" >&2
+        die_config 'Hermes route smoke probes failed; services were not activated'
+    fi
+    printf '%s\n' "$output"
 }
 
 verify_installed_units() {

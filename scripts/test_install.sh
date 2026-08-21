@@ -242,7 +242,7 @@ check_status 'Hermes same-runtime mode fixture creates owned route secrets' 78 \
     --runtime hermes --profile default
 generated_notify="$sandbox/.config/agenteiamail/hermes/notify.secret"
 chmod 0644 "$generated_notify"
-check_status 'Hermes same-runtime rerun reaches the route boundary after mode repair' 75 \
+check_status 'Hermes same-runtime rerun maps route failure to installer contract' 78 \
     --runtime hermes --profile default
 if [[ "$(stat -c %a "$generated_notify")" == 600 ]]; then
     printf 'ok   Hermes same-runtime convergence repairs owned secret mode drift\n'
