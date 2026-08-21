@@ -400,6 +400,19 @@ check_status 'convergence repairs owned artifact mode drift' 10 --runtime opencl
 [[ "$(stat -c %a "$runtime_env")" == 600 ]] || {
     printf 'FAIL convergence did not restore the owned runtime config mode\n'; fail=$((fail + 1));
 }
+# An active-but-disabled unit keeps running when `enable --now` is applied. If
+# owned runtime files changed, convergence must restart that process rather than
+# accepting enabled+active state while it still has the old boundary in memory.
+rm -f "$FAKE_SYSTEMD_STATE/agenteiamail-dispatch.service.enabled"
+chmod 0644 "$runtime_env"
+: >"$FAKE_SYSTEMD_LOG"
+check_status 'changed active-but-disabled service is enabled and restarted' 10 \
+    --runtime openclaw
+[[ "$(<"$FAKE_SYSTEMD_LOG")" == *'--user enable --now agenteiamail-dispatch.service'* &&
+   "$(<"$FAKE_SYSTEMD_LOG")" == *'--user restart agenteiamail-dispatch.service'* ]] || {
+    printf 'FAIL active-but-disabled changed service was enabled without restart\n'
+    fail=$((fail + 1))
+}
 : >"$FAKE_SYSTEMD_LOG"
 check_status 'second OpenClaw convergence is idempotent' 0 --runtime openclaw
 [[ "$(<"$FAKE_SYSTEMD_LOG")" != *'enable --now'* ]] || {

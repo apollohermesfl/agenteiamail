@@ -1046,13 +1046,18 @@ print_final_verification_report() {
 }
 
 converge_required_services() {
-    local unit
+    local unit was_enabled was_active
     "$discovered_systemctl" --user daemon-reload || \
         die_config 'systemctl --user daemon-reload failed; no service was enabled'
     for unit in agenteiamail-idle.service agenteiamail-dispatch.service \
         agenteiamail-logrotate.timer; do
-        if "$discovered_systemctl" --user is-enabled --quiet "$unit" && \
-           "$discovered_systemctl" --user is-active --quiet "$unit"; then
+        was_enabled=0
+        was_active=0
+        "$discovered_systemctl" --user is-enabled --quiet "$unit" 2>/dev/null && \
+            was_enabled=1
+        "$discovered_systemctl" --user is-active --quiet "$unit" 2>/dev/null && \
+            was_active=1
+        if ((was_enabled && was_active)); then
             if ((runtime_filesystem_changed)); then
                 "$discovered_systemctl" --user restart "$unit" || \
                     die_config "failed to restart changed required user unit: $unit"
@@ -1067,11 +1072,19 @@ converge_required_services() {
         fi
         "$discovered_systemctl" --user enable --now "$unit" || \
             die_config "failed to enable and start required user unit: $unit"
+        if ((runtime_filesystem_changed && was_active)); then
+            "$discovered_systemctl" --user restart "$unit" || \
+                die_config "failed to restart changed required user unit: $unit"
+        fi
         if ! "$discovered_systemctl" --user is-enabled --quiet "$unit" || \
            ! "$discovered_systemctl" --user is-active --quiet "$unit"; then
             die_config "required user unit did not become enabled and active: $unit"
         fi
-        printf 'service=%s state=enabled-active changed=true\n' "$unit"
+        if ((runtime_filesystem_changed && was_active)); then
+            printf 'service=%s state=enabled-active changed=true restarted=true\n' "$unit"
+        else
+            printf 'service=%s state=enabled-active changed=true\n' "$unit"
+        fi
         changes_made=1
     done
 }
