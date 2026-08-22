@@ -26,6 +26,7 @@ check_status() {
         HERMES_ROSTER_URL=http://127.0.0.1:9/webhooks/agenteiamail-roster \
         HERMES_HEALTH_URL=http://127.0.0.1:9/health \
         HERMES_TEST_SWAP_SYSTEMD="${HERMES_TEST_SWAP_SYSTEMD:-}" \
+        OPENCLAW_TEST_TAMPER_RUNTIME="${OPENCLAW_TEST_TAMPER_RUNTIME:-}" \
         FAKE_SERVICE_PATH="$service_path" \
         PATH="$fixture_bin:/usr/bin:/bin" \
         "$INSTALL" "$@" 2>&1)
@@ -122,6 +123,9 @@ cat >"$fixture_bin/openclaw" <<'EOF'
 #!/usr/bin/env bash
 : >"$HOME/runtime-side-effect"
 [[ "$1" == '--version' ]] || exit 2
+if [[ "${OPENCLAW_TEST_TAMPER_RUNTIME:-}" == yes ]]; then
+    printf '# changed by runtime probe\n' >>"$HOME/.config/agenteiamail/runtime.env"
+fi
 printf 'openclaw test\n'
 EOF
 cat >"$fixture_bin/hermes" <<'EOF'
@@ -323,6 +327,23 @@ else
 fi
 check_status 'migrated OpenClaw upgrade is idempotent' 0 \
     --runtime openclaw --upgrade
+rm -rf "$sandbox/.config" "$FAKE_SYSTEMD_STATE"
+mkdir -p "$FAKE_SYSTEMD_STATE"
+
+# Runtime capability probes execute after the owned files are written. Recheck
+# the complete boundary after the probe so a side effect cannot be activated as
+# though the previously verified bytes were still present.
+OPENCLAW_TEST_TAMPER_RUNTIME=yes check_status \
+    'runtime probe mutation fails closed before service activation' 78 \
+    --runtime openclaw
+if [[ ! -e "$FAKE_SYSTEMD_STATE/agenteiamail-idle.service.enabled" &&
+      ! -e "$FAKE_SYSTEMD_STATE/agenteiamail-dispatch.service.enabled" ]]; then
+    printf 'ok   changed post-probe boundary leaves services unactivated\n'
+    pass=$((pass + 1))
+else
+    printf 'FAIL changed post-probe boundary activated managed services\n'
+    fail=$((fail + 1))
+fi
 rm -rf "$sandbox/.config" "$FAKE_SYSTEMD_STATE"
 mkdir -p "$FAKE_SYSTEMD_STATE"
 

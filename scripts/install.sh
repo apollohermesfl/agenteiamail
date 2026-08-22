@@ -424,14 +424,14 @@ artifact_expected_mode() {
     fi
 }
 
-validate_owned_boundary_for_migration() {
-    local destination output
+validate_owned_boundary() {
+    local phase=$1 destination output
     for destination in "${managed_paths[@]}"; do
         [[ -n "${owned_digests[$destination]+present}" ]] || continue
         validate_container_chain "${destination%/*}" >/dev/null || \
-            die_config "unsafe artifact container during runtime migration: ${destination%/*}"
+            die_config "unsafe artifact container during $phase: ${destination%/*}"
         [[ -e "$destination" || -L "$destination" ]] || \
-            die_config "owned artifact is missing during runtime migration: $destination"
+            die_config "owned artifact is missing during $phase: $destination"
         if ! output=$(python3 "$ROOT/scripts/install_manifest.py" verify-artifact \
             --path "$destination" --expected-digest "${owned_digests[$destination]}" \
             --expected-mode "$(artifact_expected_mode "$destination")" 2>&1); then
@@ -448,7 +448,7 @@ migrate_ownership_manifest() {
     # runtime (notably generated Hermes secrets). Validate the complete ledger
     # before transferring its runtime header so a modified carried record cannot
     # bypass target-runtime inventory and retain false ownership provenance.
-    validate_owned_boundary_for_migration
+    validate_owned_boundary 'runtime migration'
     local -a arguments=(
         --manifest "$manifest"
         --from-runtime "$manifest_runtime"
@@ -1290,6 +1290,12 @@ if [[ "$runtime" == openclaw ]]; then
     probe_openclaw_service_environment
 else
     probe_hermes_routes
+fi
+validate_owned_boundary 'service activation'
+if [[ "$runtime" == hermes ]]; then
+    if ! secret_error=$(validate_hermes_secret_files "$discovered_python"); then
+        die_config "Hermes secret validation changed before service activation: $secret_error"
+    fi
 fi
 converge_required_services
 print_final_verification_report
