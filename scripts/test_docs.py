@@ -77,6 +77,11 @@ check(
     True,
     "systemctl --user stop    agenteiamail-logrotate.service" in uninstall_text,
 )
+check(
+    "UNINSTALL.md inventories the current dispatcher unit name",
+    True,
+    "`dispatch.service`" in uninstall_text and "`watch.service`" not in uninstall_text,
+)
 required_env_files = required_environment_files()
 manual_files = manually_created_files("INSTALL.md")
 check(

@@ -59,7 +59,7 @@ yours, and everything after this point is destructive:
 systemctl --user list-unit-files | grep -i agentei
 ```
 
-A full install has four: `idle.service`, `watch.service`, `logrotate.service` and
+A full install has four: `idle.service`, `dispatch.service`, `logrotate.service` and
 `logrotate.timer`. The logrotate *service* is typically `static`; it has no
 `[Install]` section, so `disable` does nothing. Stop it explicitly in case a
 rotation is active before deleting its unit file.
