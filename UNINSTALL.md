@@ -61,12 +61,13 @@ systemctl --user list-unit-files | grep -i agentei
 
 A full install has four: `idle.service`, `watch.service`, `logrotate.service` and
 `logrotate.timer`. The logrotate *service* is typically `static`; it has no
-`[Install]` section, so `disable` does nothing and it is simply deleted with the
-rest. That is expected, not an error.
+`[Install]` section, so `disable` does nothing. Stop it explicitly in case a
+rotation is active before deleting its unit file.
 
 ```bash
 systemctl --user stop    agenteiamail-idle.service agenteiamail-dispatch.service
 systemctl --user disable agenteiamail-idle.service agenteiamail-dispatch.service
+systemctl --user stop    agenteiamail-logrotate.service
 systemctl --user stop    agenteiamail-logrotate.timer
 systemctl --user disable agenteiamail-logrotate.timer
 

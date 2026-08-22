@@ -27,11 +27,11 @@ an unchanged rerun makes no service change. Runtime migration is allowed only wi
 `--upgrade`; generated Hermes secrets remain accounted for across migration.
 
 Uninstall first validates every owned artifact. If the user manager is reachable,
-it then disables and stops the three owned enabled units before removing only
-manifest-recorded files. Credentials, roster, repository, mail state, journal,
-cursor, and logs are preserved. On a degraded host without a user manager,
-filesystem cleanup continues with an explicit warning that deactivation is
-unconfirmed.
+it then disables and stops every owned unit that is enabled or active, including
+an active static rotation service, before removing only manifest-recorded files.
+Credentials, roster, repository, mail state, journal, cursor, and logs are
+preserved. On a degraded host without a user manager, filesystem cleanup continues
+with an explicit warning that deactivation is unconfirmed.
 
 `--dry-run` resolves the systemd-user service `PATH` and reports planned versus
 preserved artifacts without executing OpenClaw or Hermes and without modifying

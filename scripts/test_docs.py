@@ -65,6 +65,18 @@ enableable = {
 check("INSTALL.md installs every shipped unit", shipped, installed)
 check("INSTALL.md enables every installed enableable unit", enableable, enabled_units("INSTALL.md"))
 check("UPGRADE.md enables every installed enableable unit", enableable, enabled_units("UPGRADE.md"))
+install_text = (ROOT / "INSTALL.md").read_text()
+check(
+    "INSTALL.md describes deactivation of active static owned units",
+    True,
+    bool(re.search(r"including\s+an active static rotation service", install_text)),
+)
+uninstall_text = (ROOT / "UNINSTALL.md").read_text()
+check(
+    "UNINSTALL.md stops the static rotation service before manual removal",
+    True,
+    "systemctl --user stop    agenteiamail-logrotate.service" in uninstall_text,
+)
 required_env_files = required_environment_files()
 manual_files = manually_created_files("INSTALL.md")
 check(
