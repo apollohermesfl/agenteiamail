@@ -49,7 +49,13 @@ fixture_root=$(mktemp -d)
 fixture_bin="$fixture_root/bin"
 mkdir -p "$fixture_bin"
 trap 'rm -rf "$sandbox" "$fixture_root"' EXIT
-before=$(python3 -c 'from pathlib import Path; print(sorted(str(p) for p in Path("'$sandbox'").rglob("*")))')
+before=$(python3 - "$sandbox" <<'PY'
+from pathlib import Path
+import sys
+
+print(sorted(str(path) for path in Path(sys.argv[1]).rglob("*")))
+PY
+)
 
 cat >"$fixture_bin/systemctl" <<'EOF'
 #!/usr/bin/env bash
@@ -689,7 +695,8 @@ check_status 'blocked unit container is a configuration refusal, not plan status
     printf 'FAIL blocked artifacts did not propagate explicit refusal state\n'
     fail=$((fail + 1))
 }
-[[ "$LAST_OUTPUT" == *"install: unsafe managed container $sandbox/.config/systemd/user reason=group-or-world-writable; run: chmod go-w -- $sandbox/.config/systemd/user"* ]] || {
+printf -v quoted_unit_container '%q' "$sandbox/.config/systemd/user"
+[[ "$LAST_OUTPUT" == *"install: unsafe managed container $sandbox/.config/systemd/user reason=group-or-world-writable; run: chmod go-w -- $quoted_unit_container"* ]] || {
     printf 'FAIL refusal did not name the unsafe container, reason, and chmod remediation\n'
     fail=$((fail + 1))
 }
@@ -884,7 +891,13 @@ FAKE_SYSTEMD=no FAKE_LINGER=no check_status \
 }
 mv "$fixture_bin/openclaw.off" "$fixture_bin/openclaw"
 
-after=$(python3 -c 'from pathlib import Path; print(sorted(str(p) for p in Path("'$sandbox'").rglob("*")))')
+after=$(python3 - "$sandbox" <<'PY'
+from pathlib import Path
+import sys
+
+print(sorted(str(path) for path in Path(sys.argv[1]).rglob("*")))
+PY
+)
 if [[ "$before" == "$after" ]]; then
     printf 'ok   dry-run checks leave HOME untouched
 '
