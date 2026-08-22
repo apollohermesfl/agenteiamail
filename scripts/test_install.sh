@@ -25,6 +25,7 @@ check_status() {
         HERMES_NOTIFY_URL=http://127.0.0.1:9/webhooks/agenteiamail-notify \
         HERMES_ROSTER_URL=http://127.0.0.1:9/webhooks/agenteiamail-roster \
         HERMES_HEALTH_URL=http://127.0.0.1:9/health \
+        HERMES_TEST_SWAP_SYSTEMD="${HERMES_TEST_SWAP_SYSTEMD:-}" \
         FAKE_SERVICE_PATH="$service_path" \
         PATH="$fixture_bin:/usr/bin:/bin" \
         "$INSTALL" "$@" 2>&1)
@@ -127,6 +128,11 @@ cat >"$fixture_bin/hermes" <<'EOF'
 #!/usr/bin/env bash
 : >"$HOME/runtime-side-effect"
 if [[ "$1" == 'webhook' && "$2" == '--help' ]]; then
+    if [[ -n "${HERMES_TEST_SWAP_SYSTEMD:-}" ]]; then
+        mkdir -p "$HOME/.config"
+        rm -rf "$HOME/.config/systemd"
+        ln -s "$HERMES_TEST_SWAP_SYSTEMD" "$HOME/.config/systemd"
+    fi
     printf 'webhook test help\n'
     exit 0
 fi
@@ -704,6 +710,24 @@ check_status 'legacy credential symlink is detected as preserve-only' 10 \
     printf 'FAIL legacy credential probe became an owned write target\n'; fail=$((fail + 1));
 }
 rm -rf "$sandbox/.openclaw"
+
+# Runtime probing happens after inventory and before secure container creation.
+# If that executable replaces a previously absent ancestor with a symlink, the
+# installer must refuse without letting mkdir create anything through the link.
+post_probe_target="$fixture_root/post-probe-systemd"
+mkdir -p "$post_probe_target"
+HERMES_TEST_SWAP_SYSTEMD="$post_probe_target" check_status \
+    'post-probe ancestor swap fails closed before outside mutation' 78 \
+    --runtime hermes --profile default --non-interactive \
+    --notify-secret-file "$notify_secret" --roster-secret-file "$roster_secret"
+if [[ -z "$(find "$post_probe_target" -mindepth 1 -print -quit)" ]]; then
+    printf 'ok   secure container creation never follows a post-inventory symlink\n'
+    pass=$((pass + 1))
+else
+    printf 'FAIL secure container creation wrote through a post-inventory symlink\n'
+    fail=$((fail + 1))
+fi
+rm -rf "$sandbox/.config" "$post_probe_target"
 
 check_status 'Hermes dry-run validates secrets and reports planned changes' 10 \
     --runtime hermes --profile default --non-interactive --dry-run \

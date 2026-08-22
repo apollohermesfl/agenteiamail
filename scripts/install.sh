@@ -721,13 +721,22 @@ plan_has_changes() {
     ((inventory_changes))
 }
 
+ensure_secure_container() {
+    local target=$1 output
+    if ! output=$("$discovered_python" "$ROOT/scripts/install_manifest.py" \
+        ensure-directory --home "$HOME" --path "$target" 2>&1); then
+        printf '%s\n' "$output" >&2
+        exit "$EX_CONFIG"
+    fi
+}
+
 create_secure_containers() {
-    umask 077
-    mkdir -p -- "$unit_dir" "$config_dir"
+    ensure_secure_container "$unit_dir"
+    ensure_secure_container "$config_dir"
     validate_container_chain "$unit_dir" >/dev/null || die_config "unsafe unit container after creation: $unit_dir"
     validate_container_chain "$config_dir" >/dev/null || die_config "unsafe config container after creation: $config_dir"
     if [[ "$runtime" == hermes && -z "$notify_secret_file" ]]; then
-        mkdir -p -- "$hermes_dir"
+        ensure_secure_container "$hermes_dir"
         validate_container_chain "$hermes_dir" >/dev/null || \
             die_config "unsafe Hermes secret container after creation: $hermes_dir"
     fi

@@ -120,6 +120,54 @@ def _atomic_replace(dir_fd: int, name: str, data: bytes, mode: int) -> None:
     os.fsync(dir_fd)
 
 
+def _validate_managed_directory(fd: int, path: Path) -> None:
+    metadata = os.fstat(fd)
+    if not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != os.geteuid():
+        raise Refusal(f"managed directory is not a user-owned directory: {path}")
+    if stat.S_IMODE(metadata.st_mode) & 0o022:
+        raise Refusal(f"managed directory is group or world writable: {path}")
+
+
+def cmd_ensure_directory(args: argparse.Namespace) -> None:
+    """Create a managed directory chain without following a replaced ancestor."""
+    home = Path(args.home)
+    destination = Path(args.path)
+    if not home.is_absolute() or not destination.is_absolute():
+        raise Refusal("managed home and directory must be absolute")
+    try:
+        relative = destination.relative_to(home)
+    except ValueError as exc:
+        raise Refusal(f"managed directory must be below HOME: {destination}") from exc
+    if any(part == ".." for part in relative.parts):
+        raise Refusal(f"managed directory contains parent traversal: {destination}")
+
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    fd = _open_dir(home)
+    current = home
+    try:
+        _validate_managed_directory(fd, current)
+        for component in relative.parts:
+            current = current / component
+            try:
+                next_fd = os.open(component, flags, dir_fd=fd)
+            except FileNotFoundError:
+                try:
+                    os.mkdir(component, 0o700, dir_fd=fd)
+                    os.fsync(fd)
+                except FileExistsError:
+                    pass
+                next_fd = os.open(component, flags, dir_fd=fd)
+            try:
+                _validate_managed_directory(next_fd, current)
+            except BaseException:
+                os.close(next_fd)
+                raise
+            os.close(fd)
+            fd = next_fd
+    finally:
+        os.close(fd)
+
+
 def cmd_read(args: argparse.Namespace) -> None:
     path = Path(args.manifest)
     fd = _open_dir(path.parent)
@@ -377,6 +425,9 @@ def parser() -> argparse.ArgumentParser:
     repair_mode.add_argument("--path", required=True)
     repair_mode.add_argument("--expected-digest", required=True)
     repair_mode.add_argument("--mode", type=lambda value: int(value, 8), required=True)
+    ensure_directory = sub.add_parser("ensure-directory")
+    ensure_directory.add_argument("--home", required=True)
+    ensure_directory.add_argument("--path", required=True)
     return result
 
 
@@ -389,7 +440,8 @@ def main() -> None:
          "write-artifact": cmd_write_artifact,
          "remove-artifact": cmd_remove_artifact,
          "verify-artifact": cmd_remove_artifact,
-         "repair-artifact-mode": cmd_repair_artifact_mode}[args.command](args)
+         "repair-artifact-mode": cmd_repair_artifact_mode,
+         "ensure-directory": cmd_ensure_directory}[args.command](args)
     except Refusal as exc:
         _die(str(exc))
     except OSError as exc:
