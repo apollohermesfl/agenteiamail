@@ -557,6 +557,8 @@ check_status 'modified owned artifact is preserved with actionable recovery' 78 
 }
 modified_backup="$fixture_root/operator-runtime.env"
 mv -- "$modified" "$modified_backup"
+: >"$FAKE_SYSTEMD_STATE/agenteiamail-logrotate.service.active"
+: >"$FAKE_SYSTEMD_LOG"
 check_status 'uninstall forgets a preserved modified artifact after move-aside' 10 \
     --runtime openclaw --uninstall
 [[ -f "$modified_backup" &&
@@ -565,9 +567,11 @@ check_status 'uninstall forgets a preserved modified artifact after move-aside' 
    ! -e "$FAKE_SYSTEMD_STATE/agenteiamail-idle.service.active" &&
    ! -e "$FAKE_SYSTEMD_STATE/agenteiamail-dispatch.service.enabled" &&
    ! -e "$FAKE_SYSTEMD_STATE/agenteiamail-dispatch.service.active" &&
+   ! -e "$FAKE_SYSTEMD_STATE/agenteiamail-logrotate.service.active" &&
    ! -e "$FAKE_SYSTEMD_STATE/agenteiamail-logrotate.timer.enabled" &&
-   ! -e "$FAKE_SYSTEMD_STATE/agenteiamail-logrotate.timer.active" ]] || {
-    printf 'FAIL move-aside recovery did not preserve the edit, stop services, and clear ownership\n'
+   ! -e "$FAKE_SYSTEMD_STATE/agenteiamail-logrotate.timer.active" &&
+   "$(<"$FAKE_SYSTEMD_LOG")" == *'--user disable --now agenteiamail-logrotate.service'* ]] || {
+    printf 'FAIL move-aside recovery did not preserve the edit, stop every owned service, and clear ownership\n'
     fail=$((fail + 1))
 }
 rm -rf "$sandbox/.config" "$sandbox/.local"

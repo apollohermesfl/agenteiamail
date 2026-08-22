@@ -792,7 +792,7 @@ deactivate_owned_services() {
         return 0
     fi
     for unit in agenteiamail-idle.service agenteiamail-dispatch.service \
-        agenteiamail-logrotate.timer; do
+        agenteiamail-logrotate.service agenteiamail-logrotate.timer; do
         unit_path="$unit_dir/$unit"
         [[ -n "${owned_digests[$unit_path]+present}" ]] || continue
         if "$discovered_systemctl" --user is-enabled --quiet "$unit" 2>/dev/null ||
